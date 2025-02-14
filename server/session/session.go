@@ -321,9 +321,9 @@ func (s *Session) handlePackets() {
 	var packets []packet.Packet
 
 	var errReadPacket = make(chan error)
-	defer close(errReadPacket)
 
 	go func() {
+		defer close(errReadPacket)
 		for {
 			pk, err := s.conn.ReadPacket()
 			if err != nil {
