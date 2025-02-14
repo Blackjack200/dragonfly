@@ -84,6 +84,7 @@ type Session struct {
 	invOpened             bool
 
 	closeBackground chan struct{}
+	closePackets    chan struct{}
 }
 
 // Conn represents a connection that packets are read from and written to by a Session. In addition, it holds some
@@ -151,6 +152,7 @@ func (conf Config) New(conn Conn) *Session {
 	*s = Session{
 		openChunkTransactions:  make([]map[uint64]struct{}, 0, 8),
 		closeBackground:        make(chan struct{}),
+		closePackets:           make(chan struct{}),
 		handlers:               map[uint32]packetHandler{},
 		entityRuntimeIDs:       map[*world.EntityHandle]uint64{},
 		entities:               map[uint64]*world.EntityHandle{},
@@ -277,6 +279,7 @@ func (s *Session) CloseConnection() {
 	s.connOnce.Do(func() {
 		_ = s.conn.Close()
 		close(s.closeBackground)
+		close(s.closePackets)
 	})
 }
 
@@ -311,17 +314,53 @@ func (s *Session) handlePackets() {
 			s.Close(tx, e.(Controllable))
 		})
 	}()
-	for {
-		pk, err := s.conn.ReadPacket()
-		if err != nil {
-			return
+	ticker := time.NewTicker(time.Second / 20)
+	defer ticker.Stop()
+
+	var packetsMu sync.Mutex
+	var packets []packet.Packet
+
+	var errReadPacket = make(chan error)
+	defer close(errReadPacket)
+
+	go func() {
+		for {
+			pk, err := s.conn.ReadPacket()
+			if err != nil {
+				errReadPacket <- err
+				break
+			}
+			packetsMu.Lock()
+			packets = append(packets, pk)
+			packetsMu.Unlock()
 		}
-		s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
-			err = s.handlePacket(pk, tx, e.(Controllable))
-		})
-		if err != nil {
-			s.conf.Log.Debug("process packet: " + err.Error())
-			return
+	}()
+
+	running := true
+	for running {
+		select {
+		case <-errReadPacket:
+			running = false
+			break
+		case <-s.closePackets:
+			running = false
+			break
+		case <-ticker.C:
+			packetsMu.Lock()
+			copied := packets[:]
+			packets = nil
+			packetsMu.Unlock()
+			if len(copied) > 0 {
+				s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
+					for _, pk := range copied {
+						err := s.handlePacket(pk, tx, e.(Controllable))
+						if err != nil {
+							s.conf.Log.Debug("process packet: " + err.Error())
+							return
+						}
+					}
+				})
+			}
 		}
 	}
 }
