@@ -2364,6 +2364,7 @@ func (p *Player) Latency() time.Duration {
 // Tick ticks the entity, performing actions such as checking if the player is still breaking a block.
 func (p *Player) Tick(tx *world.Tx, current int64) {
 	if p.Dead() {
+		p.session().Tick(tx, p)
 		return
 	}
 	if _, ok := p.tx.Liquid(cube.PosFromVec3(p.Position())); !ok {
