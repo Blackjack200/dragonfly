@@ -22,6 +22,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +37,9 @@ type Session struct {
 	ent      *world.EntityHandle
 	conn     Conn
 	handlers map[uint32]packetHandler
+
+	pkBufMu sync.Mutex
+	pkBuf   []packet.Packet
 
 	currentScoreboard atomic.Pointer[string]
 	currentLines      atomic.Pointer[[]string]
@@ -226,7 +230,7 @@ func (s *Session) Spawn(c Controllable, tx *world.Tx) {
 	}
 
 	go s.background()
-	go s.handlePackets()
+	go s.readPackets()
 }
 
 // Close closes the session, which in turn closes the controllable and the connection that the session
@@ -295,9 +299,9 @@ func (s *Session) ClientData() login.ClientData {
 	return s.conn.ClientData()
 }
 
-// handlePackets continuously handles incoming packets from the connection. It processes them accordingly.
-// Once the connection is closed, handlePackets will return.
-func (s *Session) handlePackets() {
+// readPackets continuously reads incoming packets from the connection. It puts them into a buffer.
+// Once the connection is closed, readPackets will return.
+func (s *Session) readPackets() {
 	defer func() {
 		// First close the Controllable. This might lead to a world change
 		// (player might be dead while disconnecting, in which case it will
@@ -316,11 +320,28 @@ func (s *Session) handlePackets() {
 		if err != nil {
 			return
 		}
-		s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
-			err = s.handlePacket(pk, tx, e.(Controllable))
-		})
+		s.pkBufMu.Lock()
+		s.pkBuf = append(s.pkBuf, pk)
+		s.pkBufMu.Unlock()
+	}
+}
+
+func (s *Session) handlePackets(tx *world.Tx, e Controllable) {
+	s.pkBufMu.Lock()
+	buf := slices.Clone(s.pkBuf)
+	s.pkBuf = nil
+	s.pkBufMu.Unlock()
+	for _, pk := range buf {
+		err := s.handlePacket(pk, tx, e)
 		if err != nil {
 			s.conf.Log.Debug("process packet: " + err.Error())
+			// First close the Controllable. This might lead to a world change
+			// (player might be dead while disconnecting, in which case it will
+			// respawn first).
+			_ = e.Close()
+			// Because the player might no longer be in the same world after
+			// closing, we create a new transaction
+			s.Close(tx, e)
 			return
 		}
 	}
@@ -523,4 +544,8 @@ func (s *Session) sendAvailableEntities(w *world.World) {
 		panic("should never happen")
 	}
 	s.writePacket(&packet.AvailableActorIdentifiers{SerialisedEntityIdentifiers: serializedEntityData})
+}
+
+func (s *Session) Tick(tx *world.Tx, p Controllable) {
+	s.handlePackets(tx, p)
 }
