@@ -326,7 +326,12 @@ func (s *Session) readPackets() {
 	}
 }
 
-func (s *Session) handlePackets(tx *world.Tx, e Controllable) {
+type Handlable interface {
+	Controllable
+	H() *world.EntityHandle
+}
+
+func (s *Session) handlePackets(tx *world.Tx, e Handlable) {
 	s.pkBufMu.Lock()
 	buf := slices.Clone(s.pkBuf)
 	s.pkBuf = nil
@@ -341,7 +346,9 @@ func (s *Session) handlePackets(tx *world.Tx, e Controllable) {
 			_ = e.Close()
 			// Because the player might no longer be in the same world after
 			// closing, we create a new transaction
-			s.Close(tx, e)
+			go e.H().ExecWorld(func(tx *world.Tx, e world.Entity) {
+				s.Close(tx, e.(Controllable))
+			})
 			return
 		}
 	}
@@ -546,6 +553,6 @@ func (s *Session) sendAvailableEntities(w *world.World) {
 	s.writePacket(&packet.AvailableActorIdentifiers{SerialisedEntityIdentifiers: serializedEntityData})
 }
 
-func (s *Session) Tick(tx *world.Tx, p Controllable) {
+func (s *Session) Tick(tx *world.Tx, p Handlable) {
 	s.handlePackets(tx, p)
 }
