@@ -1662,7 +1662,7 @@ func (p *Player) AttackEntity(e world.Entity) bool {
 
 	i, _ := p.HeldItems()
 	living, ok := e.(entity.Living)
-	if !ok {
+	if !ok || living.Dead() {
 		return false
 	}
 
