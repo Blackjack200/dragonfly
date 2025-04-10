@@ -57,6 +57,22 @@ func (s *Session) StartShowingEntity(e world.Entity) {
 	}
 }
 
+func (s *Session) StartShowingEntityHandle(tx *world.Tx, h *world.EntityHandle) {
+	s.entityMutex.Lock()
+	_, ok := s.hiddenEntities[h.UUID()]
+	if ok {
+		delete(s.hiddenEntities, h.UUID())
+	}
+	s.entityMutex.Unlock()
+
+	if e, ok2 := h.Entity(tx); ok && ok2 {
+		s.ViewEntity(e)
+		s.ViewEntityState(e)
+		s.ViewEntityItems(e)
+		s.ViewEntityArmour(e)
+	}
+}
+
 // closeCurrentContainer closes the container the player might currently have open.
 func (s *Session) closeCurrentContainer(tx *world.Tx) {
 	if !s.containerOpened.Load() {

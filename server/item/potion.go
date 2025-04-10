@@ -32,7 +32,7 @@ func (p Potion) Consume(_ *world.Tx, c Consumer) Stack {
 	for _, effect := range p.Type.Effects() {
 		c.AddEffect(effect)
 	}
-	return NewStack(GlassBottle{}, 1)
+	return Stack{}
 }
 
 // EncodeItem ...

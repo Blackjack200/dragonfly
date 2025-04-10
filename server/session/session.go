@@ -80,6 +80,11 @@ type Session struct {
 	changingDimension              atomic.Bool
 	moving                         bool
 
+	latencyMu               sync.Mutex
+	latencyThrottleCounter  int64
+	lastTimestamp           *time.Time
+	lastNetworkStackLatency atomic.Pointer[time.Duration]
+
 	recipes map[uint32]recipe.Recipe
 
 	blobMu                sync.Mutex
@@ -168,6 +173,8 @@ func (conf Config) New(conn Conn) *Session {
 		recipes:                make(map[uint32]recipe.Recipe),
 		conf:                   conf,
 	}
+	i := time.Duration(0)
+	s.lastNetworkStackLatency.Store(&i)
 	s.openedWindow.Store(inventory.New(1, nil))
 	s.openedPos.Store(&cube.Pos{})
 
@@ -292,6 +299,10 @@ func (s *Session) Addr() net.Addr {
 // Latency returns the latency of the connection.
 func (s *Session) Latency() time.Duration {
 	return s.conn.Latency()
+}
+
+func (s *Session) NetworkStackLatency() time.Duration {
+	return *s.lastNetworkStackLatency.Load()
 }
 
 // ClientData returns the login.ClientData of the underlying *minecraft.Conn.
@@ -510,6 +521,7 @@ func (s *Session) registerHandlers() {
 		packet.IDMobEquipment:              &MobEquipmentHandler{},
 		packet.IDModalFormResponse:         &ModalFormResponseHandler{forms: make(map[uint32]form.Form)},
 		packet.IDMovePlayer:                nil,
+		packet.IDNetworkStackLatency:       &NetworkStackLatencyHandler{},
 		packet.IDNPCRequest:                &NPCRequestHandler{},
 		packet.IDPlayerAction:              &PlayerActionHandler{},
 		packet.IDPlayerAuthInput:           &PlayerAuthInputHandler{},
@@ -532,6 +544,7 @@ func (s *Session) writePacket(pk packet.Packet) {
 		return
 	}
 	_ = s.conn.WritePacket(pk)
+	_ = s.conn.Flush()
 }
 
 // actorIdentifier represents the structure of an actor identifier sent over the network.
@@ -553,6 +566,23 @@ func (s *Session) sendAvailableEntities(w *world.World) {
 	s.writePacket(&packet.AvailableActorIdentifiers{SerialisedEntityIdentifiers: serializedEntityData})
 }
 
+func (s *Session) sendNetworkStackPing() {
+	unix := time.Now()
+	s.latencyMu.Lock()
+	defer s.latencyMu.Unlock()
+	if s.lastTimestamp == nil && s.latencyThrottleCounter == 10 {
+		s.lastTimestamp = &unix
+		pk := &packet.NetworkStackLatency{
+			Timestamp:     unix.Unix(),
+			NeedsResponse: true,
+		}
+		s.writePacket(pk)
+		s.latencyThrottleCounter = 0
+	}
+	s.latencyThrottleCounter++
+}
+
 func (s *Session) Tick(tx *world.Tx, p Handlable) {
 	s.handlePackets(tx, p)
+	s.sendNetworkStackPing()
 }

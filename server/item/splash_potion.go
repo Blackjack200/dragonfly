@@ -5,7 +5,6 @@ import (
 	"github.com/df-mc/dragonfly/server/item/potion"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/dragonfly/server/world/sound"
-	"math"
 )
 
 // SplashPotion is an item that grants effects when thrown.
@@ -36,10 +35,6 @@ func (s SplashPotion) Use(tx *world.Tx, user User, ctx *UseContext) bool {
 // player is looking at.
 // The added offset is an ellipse-like shape based on what the input pitch is.
 func throwableOffset(r cube.Rotation) cube.Rotation {
-	r[1] = max(min(r[1], 89.9), -89.9)
-	r[1] -= math.Sqrt(math.Pow(89.9, 2)-math.Pow(r[1], 2)) * (26.5 / 89.9)
-	r[1] = max(min(r[1], 89.9), -89.9)
-
 	return r
 }
 

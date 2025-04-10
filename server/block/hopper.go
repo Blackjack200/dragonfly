@@ -129,20 +129,8 @@ func (h Hopper) UseOnBlock(pos cube.Pos, face cube.Face, _ mgl64.Vec3, tx *world
 }
 
 // Tick ...
-func (h Hopper) Tick(currentTick int64, pos cube.Pos, tx *world.Tx) {
-	h.TransferCooldown--
-	h.CollectCooldown--
-	h.LastTick = currentTick
+func (h Hopper) Tick(int64, cube.Pos, *world.Tx) {
 
-	if !h.Powered && h.TransferCooldown <= 0 {
-		inserted := h.insertItem(pos, tx)
-		extracted := h.extractItem(pos, tx)
-		if inserted || extracted {
-			h.TransferCooldown = 8
-		}
-	}
-
-	tx.SetBlock(pos, h, nil)
 }
 
 // HopperInsertable represents a block that can have its contents inserted into by a hopper.

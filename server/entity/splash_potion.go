@@ -25,8 +25,8 @@ func NewSplashPotion(opts world.EntitySpawnOpts, t potion.Potion, owner world.En
 }
 
 var splashPotionConf = ProjectileBehaviourConfig{
-	Gravity: 0.05,
-	Drag:    0.01,
+	Gravity: 0.06,
+	Drag:    0.0025,
 	Damage:  -1,
 	Sound:   sound.GlassBreak{},
 }

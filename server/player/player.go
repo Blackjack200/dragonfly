@@ -320,7 +320,7 @@ func (p *Player) Chat(msg ...any) {
 	if p.Handler().HandleChat(ctx, &message); ctx.Cancelled() {
 		return
 	}
-	_, _ = fmt.Fprintf(chat.Global, "<%v> %v\n", p.Name(), message)
+	_, _ = fmt.Fprintf(chat.Global, "§7%v: %v\n", p.Name(), message)
 }
 
 // ExecuteCommand executes a command passed as the player. If the command could not be found, or if the usage
@@ -2350,6 +2350,12 @@ func (p *Player) ShowEntity(e world.Entity) {
 	}
 }
 
+func (p *Player) ShowEntityHandle(h *world.EntityHandle) {
+	if p.session() != session.Nop {
+		p.session().StartShowingEntityHandle(p.tx, h)
+	}
+}
+
 // Latency returns a rolling average of latency between the sending and the receiving end of the connection of
 // the player.
 // The latency returned is updated continuously and is half the round trip time (RTT).
@@ -2359,6 +2365,13 @@ func (p *Player) Latency() time.Duration {
 		return 0
 	}
 	return p.session().Latency()
+}
+
+func (p *Player) NetworkStackLatency() time.Duration {
+	if p.session() == session.Nop {
+		return 0
+	}
+	return p.session().NetworkStackLatency()
 }
 
 // Tick ticks the entity, performing actions such as checking if the player is still breaking a block.

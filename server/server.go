@@ -191,6 +191,16 @@ func (srv *Server) PlayerCount() int {
 	return len(srv.p)
 }
 
+func (srv *Server) Handles() []*world.EntityHandle {
+	srv.pmu.RLock()
+	handles := make([]*world.EntityHandle, 0, len(srv.p))
+	for _, p := range srv.p {
+		handles = append(handles, p.handle)
+	}
+	srv.pmu.RUnlock()
+	return handles
+}
+
 // Players returns an iterator that yields players currently online. If Players
 // is called from within a transaction, the respective transaction should be
 // passed. Passing nil is otherwise valid. Players returned are only valid
