@@ -570,7 +570,7 @@ func (s *Session) sendNetworkStackPing() {
 	unix := time.Now()
 	s.latencyMu.Lock()
 	defer s.latencyMu.Unlock()
-	if s.lastTimestamp == nil && s.latencyThrottleCounter == 10 {
+	if s.lastTimestamp == nil && s.latencyThrottleCounter == 20 {
 		s.lastTimestamp = &unix
 		pk := &packet.NetworkStackLatency{
 			Timestamp:     unix.Unix(),
