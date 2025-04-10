@@ -25,6 +25,13 @@ type Data struct {
 	ForceGameType                  bool
 	GameType                       int32
 	Generator                      int32
+
+	//hack for pocketmine
+	GeneratorName    string         `nbt:"generatorName,omitempty"`
+	GeneratorOptions string         `nbt:"generatorOptions,omitempty"`
+	GameRules        map[string]any `nbt:"GameRules,omitempty"`
+	PMMPDataVersiona int64          `nbt:"PMMPDataVersion,omitempty"`
+
 	InventoryVersion               string
 	LANBroadcast                   bool
 	LANBroadcastIntent             bool
