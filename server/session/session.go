@@ -35,6 +35,7 @@ type Session struct {
 	once, connOnce sync.Once
 
 	ent      *world.EntityHandle
+	flushing atomic.Bool
 	conn     Conn
 	handlers map[uint32]packetHandler
 
@@ -544,7 +545,12 @@ func (s *Session) writePacket(pk packet.Packet) {
 		return
 	}
 	_ = s.conn.WritePacket(pk)
-	_ = s.conn.Flush()
+	go func() {
+		if s.flushing.CompareAndSwap(false, true) {
+			_ = s.conn.Flush()
+			s.flushing.Store(false)
+		}
+	}()
 }
 
 // actorIdentifier represents the structure of an actor identifier sent over the network.

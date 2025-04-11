@@ -27,6 +27,7 @@ func (uc UserConfig) listenerFunc(conf Config) (Listener, error) {
 		MaximumPlayers:         conf.MaxPlayers,
 		StatusProvider:         conf.StatusProvider,
 		AuthenticationDisabled: conf.AuthDisabled,
+		FlushRate:              -1,
 		ResourcePacks:          conf.Resources,
 		Biomes:                 biomes(),
 		TexturePacksRequired:   conf.ResourcesRequired,
