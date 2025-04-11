@@ -31,6 +31,7 @@ type Data struct {
 	GeneratorOptions string         `nbt:"generatorOptions,omitempty"`
 	GameRules        map[string]any `nbt:"GameRules,omitempty"`
 	PMMPDataVersiona int64          `nbt:"PMMPDataVersion,omitempty"`
+	DayCycleStopTime int32          `nbt:"DayCycleStopTime,omitempty"`
 
 	InventoryVersion               string
 	LANBroadcast                   bool
