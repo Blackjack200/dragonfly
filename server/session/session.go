@@ -94,6 +94,7 @@ type Session struct {
 	invOpened             bool
 
 	closeBackground chan struct{}
+	inputMode       atomic.Uint32
 }
 
 // Conn represents a connection that packets are read from and written to by a Session. In addition, it holds some
@@ -176,6 +177,9 @@ func (conf Config) New(conn Conn) *Session {
 	}
 	i := time.Duration(0)
 	s.lastNetworkStackLatency.Store(&i)
+
+	s.inputMode.Store(uint32(conn.ClientData().CurrentInputMode))
+
 	s.openedWindow.Store(inventory.New(1, nil))
 	s.openedPos.Store(&cube.Pos{})
 
@@ -309,6 +313,10 @@ func (s *Session) NetworkStackLatency() time.Duration {
 // ClientData returns the login.ClientData of the underlying *minecraft.Conn.
 func (s *Session) ClientData() login.ClientData {
 	return s.conn.ClientData()
+}
+
+func (s *Session) InputMode() uint32 {
+	return s.inputMode.Load()
 }
 
 // readPackets continuously reads incoming packets from the connection. It puts them into a buffer.

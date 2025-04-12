@@ -162,6 +162,13 @@ func (p *Player) DeviceModel() string {
 	return p.session().ClientData().DeviceModel
 }
 
+func (p *Player) InputMode() uint32 {
+	if p.session() == session.Nop {
+		return 0
+	}
+	return p.session().InputMode()
+}
+
 // SelfSignedID returns the self-signed ID of the player. If the Player is not connected to a network session, an empty
 // string is returned. Otherwise, the self-signed ID the network session sent in the ClientData is returned.
 func (p *Player) SelfSignedID() string {
