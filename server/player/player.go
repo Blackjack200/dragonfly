@@ -2455,6 +2455,8 @@ func (p *Player) Tick(tx *world.Tx, current int64) {
 		}
 	}
 
+	p.session().Tick(tx, p)
+
 	if p.prevWorld != tx.World() && p.prevWorld != nil {
 		p.Handler().HandleChangeWorld(p, p.prevWorld, tx.World())
 	}
@@ -2469,7 +2471,6 @@ func (p *Player) Tick(tx *world.Tx, current int64) {
 	} else {
 		p.data.Vel = mgl64.Vec3{}
 	}
-	p.session().Tick(tx, p)
 }
 
 // tickAirSupply tick's the player's air supply, consuming it when underwater, and replenishing it when out of water.
