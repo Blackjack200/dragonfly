@@ -1653,6 +1653,12 @@ func (p *Player) AttackEntity(e world.Entity) bool {
 	if !p.canReach(e.Position()) || p.Dead() {
 		return false
 	}
+
+	living, ok := e.(entity.Living)
+	if !ok || living.Dead() {
+		return false
+	}
+
 	var (
 		force, height  = 0.45, 0.3608
 		_, slowFalling = p.Effect(effect.SlowFalling)
@@ -1667,10 +1673,6 @@ func (p *Player) AttackEntity(e world.Entity) bool {
 	p.SwingArm()
 
 	i, _ := p.HeldItems()
-	living, ok := e.(entity.Living)
-	if !ok || living.Dead() {
-		return false
-	}
 
 	dmg := i.AttackDamage()
 	if strength, ok := p.Effect(effect.Strength); ok {
