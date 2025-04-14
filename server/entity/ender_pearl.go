@@ -18,8 +18,8 @@ func NewEnderPearl(opts world.EntitySpawnOpts, owner world.Entity) *world.Entity
 }
 
 var enderPearlConf = ProjectileBehaviourConfig{
-	Gravity:  0.03,
-	Drag:     0.01,
+	Gravity:  0.08,
+	Drag:     0.0025,
 	Particle: particle.EndermanTeleport{},
 	Sound:    sound.Teleport{},
 	Hit:      teleport,
