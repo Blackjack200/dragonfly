@@ -589,9 +589,7 @@ func (p *Player) Hurt(dmg float64, src world.DamageSource) (float64, bool) {
 
 	immune := time.Now().Before(p.immuneUntil)
 	if immune {
-		if damageLeft = damageLeft - p.lastDamage; damageLeft <= 0 {
-			return 0, false
-		}
+		return 0, false
 	}
 
 	immunity := time.Second / 2
