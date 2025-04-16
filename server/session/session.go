@@ -356,6 +356,11 @@ func (s *Session) handlePackets(tx *world.Tx, e Handlable) {
 	buf := slices.Clone(s.pkBuf)
 	s.pkBuf = nil
 	s.pkBufMu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			s.conf.Log.Error("panic: process packet: ", "err", r)
+		}
+	}()
 	for _, pk := range buf {
 		err := s.handlePacket(pk, tx, e)
 		if err != nil {
