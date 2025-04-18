@@ -324,11 +324,10 @@ func (p *Player) RemoveBossBar() {
 func (p *Player) Chat(msg ...any) {
 	message := format(msg)
 	ctx := event.C(p)
-	prefix := ""
-	if p.Handler().HandleChat(ctx, &prefix, &message); ctx.Cancelled() {
+	if p.Handler().HandleChat(ctx, &message); ctx.Cancelled() {
 		return
 	}
-	_, _ = fmt.Fprintf(chat.Global, "§7%v§r§7%v: %v\n", prefix, p.Name(), message)
+	_, _ = fmt.Fprintf(chat.Global, "§7%v: %v\n", p.Name(), message)
 }
 
 // ExecuteCommand executes a command passed as the player. If the command could not be found, or if the usage
