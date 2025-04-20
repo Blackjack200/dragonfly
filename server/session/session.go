@@ -22,6 +22,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
+	"runtime"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -358,7 +360,18 @@ func (s *Session) handlePackets(tx *world.Tx, e Handlable) {
 	s.pkBufMu.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
+			buf := make([]uintptr, 64)
+			n := runtime.Callers(1, buf)
+			frames := runtime.CallersFrames(buf[:n])
+
 			s.conf.Log.Error("panic: process packet: ", "err", r)
+			for {
+				frame, more := frames.Next()
+				_, _ = fmt.Fprintf(os.Stderr, "%s:%d %s\n", frame.File, frame.Line, frame.Function)
+				if !more {
+					break
+				}
+			}
 		}
 	}()
 	for _, pk := range buf {
