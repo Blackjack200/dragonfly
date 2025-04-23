@@ -450,10 +450,10 @@ func (srv *Server) finaliseConn(ctx context.Context, conn session.Conn, l Listen
 		srv.conf.Log.Debug("spawn failed: "+err.Error(), "raddr", conn.RemoteAddr())
 		return
 	}
-	if _, ok := srv.Player(id); ok {
-		_ = l.Disconnect(conn, "Already logged in.")
-		srv.conf.Log.Debug("spawn failed: already logged in", "raddr", conn.RemoteAddr())
-		return
+	if p, ok := srv.Player(id); ok {
+		go p.ExecWorld(func(tx *world.Tx, p world.Entity) {
+			p.(*player.Player).Disconnect("Logged in from other location")
+		})
 	}
 	_ = conn.WritePacket(&packet.ItemRegistry{Items: srv.customItems})
 	srv.incoming <- srv.createPlayer(id, conn, d, w)
