@@ -541,7 +541,6 @@ func (s *Session) registerHandlers() {
 		packet.IDSetPlayerInventoryOptions: nil,
 		packet.IDSubChunkRequest:           &SubChunkRequestHandler{},
 		packet.IDText:                      &TextHandler{},
-		packet.IDTickSync:                  nil,
 		packet.IDServerBoundLoadingScreen:  &ServerBoundLoadingScreenHandler{},
 		packet.IDServerBoundDiagnostics:    &ServerBoundDiagnosticsHandler{},
 	}
