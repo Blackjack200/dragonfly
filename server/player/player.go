@@ -2050,6 +2050,15 @@ func (p *Player) PickBlock(pos cube.Pos) {
 	p.SetHeldItems(pickedItem, offhand)
 }
 
+func (p *Player) TeleportRot(pos mgl64.Vec3, rot cube.Rotation) {
+	ctx := event.C(p)
+	if p.Handler().HandleTeleport(ctx, pos); ctx.Cancelled() {
+		return
+	}
+	p.data.Rot = rot
+	p.teleport(pos)
+}
+
 // Teleport teleports the player to a target position in the world. Unlike Move, it immediately changes the
 // position of the player, rather than showing an animation.
 func (p *Player) Teleport(pos mgl64.Vec3) {
