@@ -90,6 +90,7 @@ func (conf Config) New() *World {
 		chunks:           make(map[ChunkPos]*Column),
 		closing:          make(chan struct{}),
 		queue:            make(chan transaction, 128),
+		queueClosing:     make(chan struct{}),
 		r:                rand.New(conf.RandSource),
 		advance:          s.ref.Add(1) == 1,
 		conf:             conf,
