@@ -3,10 +3,11 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/df-mc/dragonfly/server/session"
-	"github.com/sandertv/gophertunnel/minecraft"
 	"io"
 	"log/slog"
+
+	"github.com/df-mc/dragonfly/server/session"
+	"github.com/sandertv/gophertunnel/minecraft"
 )
 
 // Listener is a source for connections that may be listened on by a Server using Server.listen. Proxies can use this to
@@ -29,7 +30,6 @@ func (uc UserConfig) listenerFunc(conf Config) (Listener, error) {
 		AuthenticationDisabled: conf.AuthDisabled,
 		FlushRate:              -1,
 		ResourcePacks:          conf.Resources,
-		Biomes:                 biomes(),
 		TexturePacksRequired:   conf.ResourcesRequired,
 	}
 	if conf.Log.Enabled(context.Background(), slog.LevelDebug) {
