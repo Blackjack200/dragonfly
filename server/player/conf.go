@@ -63,6 +63,7 @@ func (cfg Config) Apply(data *world.EntityData) {
 		armour:              conf.Armour,
 		hunger:              newHungerManager(),
 		health:              entity.NewHealthManager(conf.Health, conf.MaxHealth), // 20, 20
+		naturalRegeneration: true,
 		experience:          entity.NewExperienceManager(),
 		effects:             entity.NewEffectManager(conf.Effects...),
 		locale:              conf.Locale,

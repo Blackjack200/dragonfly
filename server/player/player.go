@@ -70,9 +70,10 @@ type playerData struct {
 	flightSpeed         float64
 	verticalFlightSpeed float64
 
-	health     *entity.HealthManager
-	experience *entity.ExperienceManager
-	effects    *entity.EffectManager
+	health              *entity.HealthManager
+	naturalRegeneration bool
+	experience          *entity.ExperienceManager
+	effects             *entity.EffectManager
 
 	lastXPPickup *time.Time
 
@@ -492,6 +493,16 @@ func (p *Player) SetVerticalFlightSpeed(flightSpeed float64) {
 // base speed. The default vertical flight speed of a player is 1.0, which corresponds to 1 block/tick.
 func (p *Player) VerticalFlightSpeed() float64 {
 	return p.verticalFlightSpeed
+}
+
+// NaturalRegeneration returns whether the natural regeneration is enabled
+func (p *Player) NaturalRegeneration() bool {
+	return p.naturalRegeneration
+}
+
+// SetNaturalRegeneration sets whether the natural regeneration is enabled
+func (p *Player) SetNaturalRegeneration(naturalRegeneration bool) {
+	p.naturalRegeneration = naturalRegeneration
 }
 
 // Health returns the current health of the player. It will always be lower than Player.MaxHealth().
@@ -2536,7 +2547,7 @@ func (p *Player) tickFood() {
 
 // regenerate attempts to regenerate half a heart of health, typically caused by a full food bar.
 func (p *Player) regenerate(exhaust bool) {
-	if p.Health() == p.MaxHealth() {
+	if p.Health() == p.MaxHealth() || !p.NaturalRegeneration() {
 		return
 	}
 	p.Heal(1, entity.FoodHealingSource{})
