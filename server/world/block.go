@@ -2,10 +2,10 @@ package world
 
 import (
 	"fmt"
-	"github.com/brentp/intintmap"
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/block/customblock"
 	"github.com/df-mc/dragonfly/server/world/chunk"
+	"github.com/olebeck/intintmap"
 	"github.com/segmentio/fasthash/fnv1"
 	"image"
 	"math"
