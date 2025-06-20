@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/olebeck/intintmap v0.1.0
 	github.com/pelletier/go-toml v1.9.5
-	github.com/sandertv/gophertunnel v1.46.0
+	github.com/sandertv/gophertunnel v1.47.2
 	github.com/segmentio/fasthash v1.0.3
 	golang.org/x/exp v0.0.0-20250531010427-b6e5de432a8b
 	golang.org/x/mod v0.24.0
