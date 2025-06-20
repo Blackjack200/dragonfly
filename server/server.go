@@ -299,6 +299,18 @@ func (srv *Server) CloseOnProgramEnd() {
 
 // Close closes the server, making any call to Run/Accept cancel immediately.
 func (srv *Server) Close() error {
+	buf := make([]uintptr, 64)
+	n := runtime.Callers(1, buf)
+	frames := runtime.CallersFrames(buf[:n])
+
+	srv.conf.Log.Error("closing the server")
+	for {
+		frame, more := frames.Next()
+		_, _ = fmt.Fprintf(os.Stderr, "%s:%d %s\n", frame.File, frame.Line, frame.Function)
+		if !more {
+			break
+		}
+	}
 	if srv.started.Load() == nil {
 		panic("server not yet running")
 	}
