@@ -12,12 +12,12 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/olebeck/intintmap v0.1.0
 	github.com/pelletier/go-toml v1.9.5
-	github.com/sandertv/gophertunnel v1.47.4
+	github.com/sandertv/gophertunnel v1.47.5
 	github.com/segmentio/fasthash v1.0.3
-	golang.org/x/exp v0.0.0-20250531010427-b6e5de432a8b
-	golang.org/x/mod v0.24.0
-	golang.org/x/text v0.25.0
-	golang.org/x/tools v0.33.0
+	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b
+	golang.org/x/mod v0.25.0
+	golang.org/x/text v0.26.0
+	golang.org/x/tools v0.34.0
 )
 
 require (
@@ -26,8 +26,8 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/muhammadmuzzammil1998/jsonc v1.0.0 // indirect
 	github.com/sandertv/go-raknet v1.14.3-0.20250305181847-6af3e95113d6 // indirect
-	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
