@@ -41,7 +41,7 @@ type Session struct {
 	ent             *world.EntityHandle
 	conn            Conn
 	handlers        map[uint32]packetHandler
-	flushing        atomic.Bool
+	outgoingPackets chan packet.Packet
 	incomingPackets chan packet.Packet
 
 	currentScoreboard atomic.Pointer[string]
@@ -177,6 +177,7 @@ func (conf Config) New(conn Conn) *Session {
 		closeBackground:        make(chan struct{}),
 		closeRead:              make(chan struct{}),
 		handlers:               map[uint32]packetHandler{},
+		outgoingPackets:        make(chan packet.Packet, 256),
 		incomingPackets:        make(chan packet.Packet, 256),
 		entityRuntimeIDs:       map[*world.EntityHandle]uint64{},
 		entities:               map[uint64]*world.EntityHandle{},
@@ -220,6 +221,9 @@ func (conf Config) New(conn Conn) *Session {
 			select {
 			case <-s.closeBackground:
 				return
+			case pk := <-s.outgoingPackets:
+				_ = conn.WritePacket(pk)
+				_ = conn.Flush()
 			case first := <-s.incomingPackets:
 				var err error
 				s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
@@ -605,14 +609,10 @@ func (s *Session) writePacket(pk packet.Packet) {
 	if s == Nop {
 		return
 	}
-
-	_ = s.conn.WritePacket(pk)
-	go func() {
-		if s.flushing.CompareAndSwap(false, true) {
-			_ = s.conn.Flush()
-			s.flushing.Store(false)
-		}
-	}()
+	select {
+	case s.outgoingPackets <- pk:
+	case <-s.closeBackground:
+	}
 }
 
 // actorIdentifier represents the structure of an actor identifier sent over the network.
