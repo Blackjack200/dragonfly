@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/df-mc/dragonfly/server/player/debug"
+	"github.com/df-mc/dragonfly/server/player/hud"
 	"io"
 	"log/slog"
 	"net"
+	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,9 +30,6 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"os"
-	"runtime"
-	"slices"
 )
 
 // Session handles incoming packets from connections and sends outgoing packets by providing a thin layer
@@ -38,13 +38,11 @@ type Session struct {
 	conf           Config
 	once, connOnce sync.Once
 
-	ent      *world.EntityHandle
-	conn     Conn
-	handlers map[uint32]packetHandler
-	flushing atomic.Bool
-
-	pkBufMu sync.Mutex
-	pkBuf   []packet.Packet
+	ent             *world.EntityHandle
+	conn            Conn
+	handlers        map[uint32]packetHandler
+	flushing        atomic.Bool
+	incomingPackets chan packet.Packet
 
 	currentScoreboard atomic.Pointer[string]
 	currentLines      atomic.Pointer[[]string]
@@ -62,7 +60,6 @@ type Session struct {
 	entityRuntimeIDs map[*world.EntityHandle]uint64
 	entities         map[uint64]*world.EntityHandle
 	hiddenEntities   map[uuid.UUID]struct{}
-	visibleEntities  map[uuid.UUID]struct{}
 
 	// heldSlot is the slot in the inventory that the controllable is holding.
 	heldSlot                     *uint32
@@ -98,13 +95,19 @@ type Session struct {
 	openChunkTransactions []map[uint64]struct{}
 	invOpened             bool
 
+	hudMu      sync.RWMutex
+	hudUpdates map[hud.Element]bool
+	hiddenHud  map[hud.Element]struct{}
+
 	debugShapesMu     sync.RWMutex
 	debugShapes       map[int]debug.Shape
 	debugShapesAdd    chan debug.Shape
 	debugShapesRemove chan int
 
 	closeBackground chan struct{}
-	inputMode       atomic.Uint32
+	closeRead       chan struct{}
+
+	inputMode atomic.Uint32
 }
 
 // Conn represents a connection that packets are read from and written to by a Session. In addition, it holds some
@@ -172,11 +175,12 @@ func (conf Config) New(conn Conn) *Session {
 	*s = Session{
 		openChunkTransactions:  make([]map[uint64]struct{}, 0, 8),
 		closeBackground:        make(chan struct{}),
+		closeRead:              make(chan struct{}),
 		handlers:               map[uint32]packetHandler{},
+		incomingPackets:        make(chan packet.Packet, 256),
 		entityRuntimeIDs:       map[*world.EntityHandle]uint64{},
 		entities:               map[uint64]*world.EntityHandle{},
 		hiddenEntities:         map[uuid.UUID]struct{}{},
-		visibleEntities:        map[uuid.UUID]struct{}{},
 		blobs:                  map[uint64][]byte{},
 		chunkRadius:            int32(r),
 		maxChunkRadius:         int32(conf.MaxChunkRadius),
@@ -185,6 +189,8 @@ func (conf Config) New(conn Conn) *Session {
 		heldSlot:               new(uint32),
 		recipes:                make(map[uint32]recipe.Recipe),
 		conf:                   conf,
+		hudUpdates:             make(map[hud.Element]bool),
+		hiddenHud:              make(map[hud.Element]struct{}),
 		debugShapes:            make(map[int]debug.Shape),
 		debugShapesAdd:         make(chan debug.Shape, 256),
 		debugShapesRemove:      make(chan int, 256),
@@ -209,6 +215,64 @@ func (conf Config) New(conn Conn) *Session {
 	s.sendRecipes()
 	s.sendArmourTrimData()
 	s.SendSpeed(0.1)
+	go func() {
+		for {
+			select {
+			case <-s.closeBackground:
+				return
+			case first := <-s.incomingPackets:
+				var err error
+				s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
+					defer func() {
+						if r := recover(); r != nil {
+							buf := make([]uintptr, 64)
+							n := runtime.Callers(1, buf)
+							frames := runtime.CallersFrames(buf[:n])
+
+							s.conf.Log.Error("panic: process packet: ", "err", r)
+							for {
+								frame, more := frames.Next()
+								_, _ = fmt.Fprintf(os.Stderr, "%s:%d %s\n", frame.File, frame.Line, frame.Function)
+								if !more {
+									break
+								}
+							}
+						}
+					}()
+
+					err = s.handlePacket(first, tx, e.(Controllable))
+					if err != nil {
+						return
+					}
+
+					total := len(s.incomingPackets)
+				receive:
+					for i := 0; i < total; i++ {
+						select {
+						case <-s.closeBackground:
+							break receive
+						case pk := <-s.incomingPackets:
+							err = s.handlePacket(pk, tx, e.(Controllable))
+							if err != nil {
+								break receive
+							}
+						default:
+							break receive
+						}
+					}
+				})
+
+				if err != nil {
+					s.conf.Log.Debug("process packet: " + err.Error())
+					select {
+					case <-s.closeRead:
+					default:
+						close(s.closeRead)
+					}
+				}
+			}
+		}
+	}()
 	return s
 }
 
@@ -257,7 +321,7 @@ func (s *Session) Spawn(c Controllable, tx *world.Tx) {
 	}
 
 	go s.background()
-	go s.readPackets()
+	go s.handlePackets()
 }
 
 // Close closes the session, which in turn closes the controllable and the connection that the session
@@ -334,9 +398,9 @@ func (s *Session) InputMode() uint32 {
 	return s.inputMode.Load()
 }
 
-// readPackets continuously reads incoming packets from the connection. It puts them into a buffer.
-// Once the connection is closed, readPackets will return.
-func (s *Session) readPackets() {
+// handlePackets continuously handles incoming packets from the connection. It processes them accordingly.
+// Once the connection is closed, handlePackets will return.
+func (s *Session) handlePackets() {
 	defer func() {
 		// First close the Controllable. This might lead to a world change
 		// (player might be dead while disconnecting, in which case it will
@@ -355,52 +419,11 @@ func (s *Session) readPackets() {
 		if err != nil {
 			return
 		}
-		s.pkBufMu.Lock()
-		s.pkBuf = append(s.pkBuf, pk)
-		s.pkBufMu.Unlock()
-	}
-}
 
-type Handlable interface {
-	Controllable
-	H() *world.EntityHandle
-}
-
-func (s *Session) handlePackets(tx *world.Tx, e Handlable) {
-	s.pkBufMu.Lock()
-	buf := slices.Clone(s.pkBuf)
-	s.pkBuf = nil
-	s.pkBufMu.Unlock()
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]uintptr, 64)
-			n := runtime.Callers(1, buf)
-			frames := runtime.CallersFrames(buf[:n])
-
-			s.conf.Log.Error("panic: process packet: ", "err", r)
-			for {
-				frame, more := frames.Next()
-				_, _ = fmt.Fprintf(os.Stderr, "%s:%d %s\n", frame.File, frame.Line, frame.Function)
-				if !more {
-					break
-				}
-			}
-		}
-	}()
-	for _, pk := range buf {
-		err := s.handlePacket(pk, tx, e)
-		if err != nil {
-			s.conf.Log.Debug("process packet: " + err.Error())
-			// First close the Controllable. This might lead to a world change
-			// (player might be dead while disconnecting, in which case it will
-			// respawn first).
-			_ = e.Close()
-			// Because the player might no longer be in the same world after
-			// closing, we create a new transaction
-			go e.H().ExecWorld(func(tx *world.Tx, e world.Entity) {
-				s.Close(tx, e.(Controllable))
-			})
+		select {
+		case <-s.closeRead:
 			return
+		case s.incomingPackets <- pk:
 		}
 	}
 }
@@ -627,7 +650,11 @@ func (s *Session) sendNetworkStackPing() {
 	s.latencyThrottleCounter++
 }
 
-func (s *Session) Tick(tx *world.Tx, p Handlable) {
-	s.handlePackets(tx, p)
+type Handlable interface {
+	Controllable
+	H() *world.EntityHandle
+}
+
+func (s *Session) Tick(*world.Tx, Handlable) {
 	s.sendNetworkStackPing()
 }

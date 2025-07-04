@@ -3,6 +3,7 @@ package player
 import (
 	"fmt"
 	"github.com/df-mc/dragonfly/server/player/debug"
+	"github.com/df-mc/dragonfly/server/player/hud"
 	"math"
 	"math/rand/v2"
 	"net"
@@ -1669,8 +1670,8 @@ func (p *Player) AttackEntity(e world.Entity) bool {
 		return false
 	}
 
-	living, ok := e.(entity.Living)
-	if !ok || living.Dead() {
+	living, isLiving := e.(entity.Living)
+	if isLiving && living.Dead() {
 		return false
 	}
 
@@ -1688,6 +1689,9 @@ func (p *Player) AttackEntity(e world.Entity) bool {
 	p.SwingArm()
 
 	i, _ := p.HeldItems()
+	if !isLiving {
+		return false
+	}
 
 	dmg := i.AttackDamage()
 	if strength, ok := p.Effect(effect.Strength); ok {
@@ -2481,6 +2485,7 @@ func (p *Player) Tick(tx *world.Tx, current int64) {
 
 	p.session().Tick(tx, p)
 	p.session().SendDebugShapes()
+	p.session().SendHudUpdates()
 
 	if p.prevWorld != tx.World() && p.prevWorld != nil {
 		p.Handler().HandleChangeWorld(p, p.prevWorld, tx.World())
@@ -2905,26 +2910,41 @@ func (p *Player) UpdateDiagnostics(d session.Diagnostics) {
 	p.Handler().HandleDiagnostics(p, d)
 }
 
+// ShowHudElement shows a HUD element to the player if it is not already shown.
+func (p *Player) ShowHudElement(e hud.Element) {
+	p.session().ShowHudElement(e)
+}
+
+// HideHudElement hides a HUD element from the player if it is not already hidden.
+func (p *Player) HideHudElement(e hud.Element) {
+	p.session().HideHudElement(e)
+}
+
+// HudElementHidden checks if a HUD element is currently hidden from the player.
+func (p *Player) HudElementHidden(e hud.Element) bool {
+	return p.session().HudElementHidden(e)
+}
+
 // AddDebugShape adds a debug shape to be rendered to the player. If the shape already exists, it will be
 // updated with the new information.
 func (p *Player) AddDebugShape(shape debug.Shape) {
-	p.s.AddDebugShape(shape)
+	p.session().AddDebugShape(shape)
 }
 
 // RemoveDebugShape removes a debug shape from the player by its unique identifier.
 func (p *Player) RemoveDebugShape(shape debug.Shape) {
-	p.s.RemoveDebugShape(shape)
+	p.session().RemoveDebugShape(shape)
 }
 
 // VisibleDebugShapes returns a slice of all debug shapes that are currently being shown to the player.
 func (p *Player) VisibleDebugShapes() []debug.Shape {
-	return p.s.VisibleDebugShapes()
+	return p.session().VisibleDebugShapes()
 }
 
 // RemoveAllDebugShapes removes all rendered debug shapes from the player, as well as any shapes that have
 // not yet been rendered.
 func (p *Player) RemoveAllDebugShapes() {
-	p.s.RemoveAllDebugShapes()
+	p.session().RemoveAllDebugShapes()
 }
 
 // damageItem damages the item stack passed with the damage passed and returns the new stack. If the item
