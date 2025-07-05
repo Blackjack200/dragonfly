@@ -224,6 +224,14 @@ func (conf Config) New(conn Conn) *Session {
 			case pk := <-s.outgoingPackets:
 				_ = conn.WritePacket(pk)
 				_ = conn.Flush()
+			}
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case <-s.closeBackground:
+				return
 			case first := <-s.incomingPackets:
 				var err error
 				s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
