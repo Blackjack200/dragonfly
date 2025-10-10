@@ -1074,6 +1074,11 @@ func (w *World) addViewer(tx *Tx, c *Column, loader *Loader) {
 // hidden from the viewer and no more calls will be made when events in the
 // chunk happen.
 func (w *World) removeViewer(tx *Tx, pos ChunkPos, loader *Loader) {
+	defer func() {
+		if r := recover(); r != nil {
+			w.conf.Log.Error("removing viewer from world: " + fmt.Sprint(r))
+		}
+	}()
 	if w == nil {
 		return
 	}
@@ -1087,8 +1092,8 @@ func (w *World) removeViewer(tx *Tx, pos ChunkPos, loader *Loader) {
 	}
 
 	// Hide all entities in the chunk from the viewer.
-	for _, entity := range c.Entities {
-		if loader.viewer != nil {
+	if loader.viewer != nil {
+		for _, entity := range c.Entities {
 			loader.viewer.HideEntity(entity.mustEntity(tx))
 		}
 	}
