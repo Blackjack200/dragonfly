@@ -165,10 +165,14 @@ type commandEnum struct {
 	Dynamic bool
 }
 
+type TypedParam interface {
+	ArgType() uint32
+}
+
 // valueToParamType finds the command argument type of the value passed and returns it, in addition to creating
 // an enum if applicable.
 func valueToParamType(i cmd.ParamInfo, source cmd.Source) (t uint32, enum commandEnum) {
-	switch i.Value.(type) {
+	switch v := i.Value.(type) {
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return protocol.CommandArgTypeInt, enum
 	case float32, float64:
@@ -191,6 +195,8 @@ func valueToParamType(i cmd.ParamInfo, source cmd.Source) (t uint32, enum comman
 			Type:    "SubCommand" + i.Name,
 			Options: []string{i.Name},
 		}
+	case TypedParam:
+		return v.ArgType(), enum
 	}
 	if enum, ok := i.Value.(cmd.Enum); ok {
 		return 0, commandEnum{
