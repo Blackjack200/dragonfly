@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
