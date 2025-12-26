@@ -4,13 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/df-mc/dragonfly/server/player/debug"
-	"github.com/df-mc/dragonfly/server/player/hud"
 	"io"
 	"log/slog"
 	"net"
-	"os"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,7 +16,9 @@ import (
 	"github.com/df-mc/dragonfly/server/item/inventory"
 	"github.com/df-mc/dragonfly/server/item/recipe"
 	"github.com/df-mc/dragonfly/server/player/chat"
+	"github.com/df-mc/dragonfly/server/player/debug"
 	"github.com/df-mc/dragonfly/server/player/form"
+	"github.com/df-mc/dragonfly/server/player/hud"
 	"github.com/df-mc/dragonfly/server/player/skin"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
@@ -38,11 +36,10 @@ type Session struct {
 	conf           Config
 	once, connOnce sync.Once
 
-	ent             *world.EntityHandle
-	conn            Conn
-	handlers        map[uint32]packetHandler
-	outgoingPackets chan packet.Packet
-	incomingPackets chan packet.Packet
+	ent      *world.EntityHandle
+	conn     Conn
+	handlers map[uint32]packetHandler
+	packets  chan packet.Packet
 
 	currentScoreboard atomic.Pointer[string]
 	currentLines      atomic.Pointer[[]string]
@@ -107,7 +104,6 @@ type Session struct {
 	debugShapesRemove chan int
 
 	closeBackground chan struct{}
-	closeRead       chan struct{}
 
 	inputMode atomic.Uint32
 }
@@ -179,10 +175,8 @@ func (conf Config) New(conn Conn) *Session {
 	*s = Session{
 		openChunkTransactions:  make([]map[uint64]struct{}, 0, 8),
 		closeBackground:        make(chan struct{}),
-		closeRead:              make(chan struct{}),
 		handlers:               map[uint32]packetHandler{},
-		outgoingPackets:        make(chan packet.Packet, 256),
-		incomingPackets:        make(chan packet.Packet, 256),
+		packets:                make(chan packet.Packet, 256),
 		entityRuntimeIDs:       map[*world.EntityHandle]uint64{},
 		entities:               map[uint64]*world.EntityHandle{},
 		hiddenEntities:         map[uuid.UUID]struct{}{},
@@ -226,67 +220,9 @@ func (conf Config) New(conn Conn) *Session {
 			select {
 			case <-s.closeBackground:
 				return
-			case pk := <-s.outgoingPackets:
+			case pk := <-s.packets:
 				_ = conn.WritePacket(pk)
 				_ = conn.Flush()
-			}
-		}
-	}()
-	go func() {
-		for {
-			select {
-			case <-s.closeBackground:
-				return
-			case first := <-s.incomingPackets:
-				var err error
-				s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
-					defer func() {
-						if r := recover(); r != nil {
-							buf := make([]uintptr, 64)
-							n := runtime.Callers(1, buf)
-							frames := runtime.CallersFrames(buf[:n])
-
-							s.conf.Log.Error("panic: process packet: ", "err", r)
-							for {
-								frame, more := frames.Next()
-								_, _ = fmt.Fprintf(os.Stderr, "%s:%d %s\n", frame.File, frame.Line, frame.Function)
-								if !more {
-									break
-								}
-							}
-						}
-					}()
-
-					err = s.handlePacket(first, tx, e.(Controllable))
-					if err != nil {
-						return
-					}
-
-					total := len(s.incomingPackets)
-				receive:
-					for i := 0; i < total; i++ {
-						select {
-						case <-s.closeBackground:
-							break receive
-						case pk := <-s.incomingPackets:
-							err = s.handlePacket(pk, tx, e.(Controllable))
-							if err != nil {
-								break receive
-							}
-						default:
-							break receive
-						}
-					}
-				})
-
-				if err != nil {
-					s.conf.Log.Debug("process packet: " + err.Error())
-					select {
-					case <-s.closeRead:
-					default:
-						close(s.closeRead)
-					}
-				}
 			}
 		}
 	}()
@@ -436,11 +372,12 @@ func (s *Session) handlePackets() {
 		if err != nil {
 			return
 		}
-
-		select {
-		case <-s.closeRead:
+		s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
+			err = s.handlePacket(pk, tx, e.(Controllable))
+		})
+		if err != nil {
+			s.conf.Log.Debug("process packet: " + err.Error())
 			return
-		case s.incomingPackets <- pk:
 		}
 	}
 }
@@ -623,7 +560,7 @@ func (s *Session) writePacket(pk packet.Packet) {
 		return
 	}
 	select {
-	case s.outgoingPackets <- pk:
+	case s.packets <- pk:
 	case <-s.closeBackground:
 	}
 }
