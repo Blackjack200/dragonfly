@@ -86,6 +86,7 @@ type Session struct {
 	latencyThrottleCounter  int64
 	lastTimestamp           *time.Time
 	lastNetworkStackLatency atomic.Pointer[time.Duration]
+	lastChunkPos            world.ChunkPos
 
 	recipes map[uint32]recipe.Recipe
 
@@ -389,13 +390,14 @@ func (s *Session) background() {
 		r          map[string]map[int]cmd.Runnable
 		enums      map[string]cmd.Enum
 		enumValues map[string][]string
+		softEnums  = make(map[string]struct{})
 		ok         bool
 		i          int
 	)
 
 	s.ent.ExecWorld(func(tx *world.Tx, e world.Entity) {
 		co := e.(Controllable)
-		r = s.sendAvailableCommands(co)
+		r = s.sendAvailableCommands(co, softEnums)
 		enums, enumValues = s.enums(co)
 	})
 
@@ -410,11 +412,11 @@ func (s *Session) background() {
 				if i++; i%20 == 0 {
 					// Enum resending happens relatively often and frequent updates are more important than with full
 					// command changes. Those are generally only related to permission changes, which doesn't happen often.
-					s.resendEnums(enums, enumValues, c)
+					r = s.resendEnums(enums, enumValues, softEnums, r, c)
 				}
 				if i%100 == 0 {
 					// Try to resend commands only every 5 seconds.
-					if r, ok = s.resendCommands(r, c); ok {
+					if r, ok = s.resendCommands(r, c, softEnums); ok {
 						enums, enumValues = s.enums(c)
 					}
 				}
@@ -434,10 +436,14 @@ func (s *Session) sendChunks(tx *world.Tx, c Controllable) {
 	}
 	pos := c.Position()
 	s.chunkLoader.Move(tx, pos)
-	s.writePacket(&packet.NetworkChunkPublisherUpdate{
-		Position: protocol.BlockPos{int32(pos[0]), int32(pos[1]), int32(pos[2])},
-		Radius:   uint32(s.chunkRadius) << 4,
-	})
+	chunkPos := world.ChunkPos{int32(pos[0]) << 4, int32(pos[2]) << 4}
+	if s.lastChunkPos != chunkPos {
+		s.lastChunkPos = chunkPos
+		s.writePacket(&packet.NetworkChunkPublisherUpdate{
+			Position: protocol.BlockPos{int32(pos[0]), int32(pos[1]), int32(pos[2])},
+			Radius:   uint32(s.chunkRadius) << 4,
+		})
+	}
 
 	s.blobMu.Lock()
 	const maxChunkTransactions = 8

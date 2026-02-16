@@ -106,6 +106,18 @@ func (s *Session) SendRespawn(pos mgl64.Vec3, c Controllable) {
 	})
 }
 
+// SendPlayerSpawn updates the player's spawn point on the client-side. There is currently little reason
+// to do so other than to prevent the client-side "Respawn point set" message when sleeping in a bed.
+func (s *Session) SendPlayerSpawn(pos mgl64.Vec3) {
+	blockPos := protocol.BlockPos{int32(pos[0]), int32(pos[1]), int32(pos[2])}
+	s.writePacket(&packet.SetSpawnPosition{
+		SpawnType:     packet.SpawnTypePlayer,
+		Position:      blockPos,
+		Dimension:     packet.DimensionOverworld,
+		SpawnPosition: blockPos,
+	})
+}
+
 // sendBiomes sends all the vanilla biomes to the session.
 func (s *Session) sendBiomes() {
 	definitions, stringList := world.BiomeDefinitions()
@@ -899,7 +911,7 @@ loop:
 			shapes = append(shapes, s.debugShapeToProtocol(shape, dim))
 		case id := <-s.debugShapesRemove:
 			delete(s.debugShapes, id)
-			shapes = append(shapes, protocol.DebugDrawerShape{NetworkID: uint64(id), DimensionID: s.dimensionID(dim)})
+			shapes = append(shapes, protocol.DebugDrawerShape{NetworkID: uint64(id), DimensionID: protocol.Option(s.dimensionID(dim))})
 		default:
 			break loop
 		}
@@ -912,7 +924,7 @@ loop:
 func (s *Session) debugShapeToProtocol(shape debug.Shape, dim world.Dimension) protocol.DebugDrawerShape {
 	ps := protocol.DebugDrawerShape{
 		NetworkID:   uint64(shape.ShapeID()),
-		DimensionID: s.dimensionID(dim),
+		DimensionID: protocol.Option(s.dimensionID(dim)),
 	}
 	white := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	switch shape := shape.(type) {

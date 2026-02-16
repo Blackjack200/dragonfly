@@ -779,6 +779,13 @@ func (w *World) Spawn() cube.Pos {
 	if w == nil {
 		return cube.Pos{}
 	}
+
+	if w.Dimension() == End {
+		return cube.Pos{100, 50}
+	} else if w.Dimension() == Nether {
+		return cube.Pos{}
+	}
+
 	w.set.Lock()
 	defer w.set.Unlock()
 	return w.set.Spawn
@@ -790,6 +797,12 @@ func (w *World) SetSpawn(pos cube.Pos) {
 	if w == nil {
 		return
 	}
+
+	// nether has no spawn point and end spawn point is always 100 50 0.
+	if w.Dimension() == Nether || w.Dimension() == End {
+		return
+	}
+
 	w.set.Lock()
 	w.set.Spawn = pos
 	w.set.Unlock()
@@ -826,6 +839,17 @@ func (w *World) SetPlayerSpawn(id uuid.UUID, pos cube.Pos) {
 	if err := w.conf.Provider.SavePlayerSpawnPosition(id, pos); err != nil {
 		w.conf.Log.Error("save player spawn: "+err.Error(), "ID", id)
 	}
+}
+
+// SetRequiredSleepDuration sets the duration of time players in the world must sleep for, in order to advance to the
+// next day.
+func (w *World) SetRequiredSleepDuration(duration time.Duration) {
+	if w == nil {
+		return
+	}
+	w.set.Lock()
+	defer w.set.Unlock()
+	w.set.RequiredSleepTicks = duration.Milliseconds() / 50
 }
 
 // DefaultGameMode returns the default game mode of the world. When players
@@ -1219,7 +1243,7 @@ func (w *World) autoSave() {
 		save = time.NewTicker(w.conf.SaveInterval)
 		defer save.Stop()
 	}
-	closeUnused := time.NewTicker(time.Minute * 2)
+	closeUnused := time.NewTicker(w.conf.ChunkUnloadInterval)
 	defer closeUnused.Stop()
 
 	for {
@@ -1235,7 +1259,7 @@ func (w *World) autoSave() {
 	}
 }
 
-// closeUnusedChunk is called every 5 minutes by autoSave.
+// closeUnusedChunk closes all chunks currently not in use by any viewer.
 func (w *World) closeUnusedChunks(tx *Tx) {
 	for pos, c := range w.chunks {
 		if len(c.viewers) == 0 {
